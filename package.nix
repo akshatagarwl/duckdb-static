@@ -216,9 +216,13 @@ stdenv.mkDerivation {
   # The archive carries everything it needs, so the output must reference
   # nothing: drop the propagated inputs, and scrub the store paths compilers
   # leave in object files (dead outside Nix). `allowedReferences` enforces it.
+  # Found with a byte-level scan rather than grep, whose handling of a 250 MB
+  # binary depends on the platform's grep and locale.
   postFixup = ''
     rm -rf "$out/nix-support"
-    for ref in $(grep -aoE "$NIX_STORE/[a-z0-9]{32}-[^/\"' ]+" "$out/lib/libduckdb_static.a" | sort -u); do
+    refs=$(python3 ${./scripts/store-refs.py} "$out/lib/libduckdb_static.a" "$NIX_STORE")
+    for ref in $refs; do
+      echo "scrubbing $ref"
       remove-references-to -t "$ref" "$out/lib/libduckdb_static.a"
     done
   '';

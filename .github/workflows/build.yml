@@ -85,9 +85,12 @@ jobs:
           path: ${{ runner.temp }}/cache
           if-no-files-found: error
 
+  # Publishes whatever passed: a system's NARs are exported only after its
+  # smoke test, so a slow or failing system (macOS runners are scarce) does not
+  # hold back the others. Moving main (update.yml) still needs all of them.
   publish:
     needs: build
-    if: inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ${{ !cancelled() && (inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

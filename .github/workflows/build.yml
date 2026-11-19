@@ -1,0 +1,125 @@
+# Build and smoke-test the archive natively on every supported system. On main
+# (and when update.yml calls this before moving main), also sign the outputs
+# and publish them to the binary cache: the `nix-cache` release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build.
+        type: string
+        required: true
+      publish:
+        description: Publish the outputs to the binary cache.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CACHE_URL: https://github.com/${{ github.repository }}/releases/download/nix-cache
+  CACHE_KEY: duckdb-static.github.akshatagarwl-1:1yQ0flJ3vpCoIicGqSTO8gHezxiCOj2M0VLyJXXqQVQ=
+
+jobs:
+  build:
+    name: ${{ matrix.system }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            os: ubuntu-24.04
+          - system: aarch64-linux
+            os: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            os: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+        with:
+          # Our own cache first: an unchanged build is a download.
+          extra_nix_config: |
+            extra-substituters = ${{ env.CACHE_URL }}
+            extra-trusted-public-keys = ${{ env.CACHE_KEY }}
+
+      - name: Build
+        run: nix build -L .#duckdb
+
+      - name: Smoke test
+        run: nix build -L '.#checks.${{ matrix.system }}.smoke'
+
+      - name: Export signed NARs
+        if: inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        env:
+          NIX_SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/signing.key"
+          printf '%s' "$NIX_SIGNING_KEY" > "$key"
+          cache="$RUNNER_TEMP/cache"
+          nix copy --to "file://$cache?compression=zstd&compression-level=19&secret-key=$key" ./result
+          rm -f "$key"
+          # Release assets are one flat directory: move the NARs next to their
+          # .narinfo. The signature covers the store path, NAR hash and
+          # references, not the URL, so rewriting it keeps the signature valid.
+          cd "$cache"
+          mv nar/* .
+          rmdir nar
+          for f in *.narinfo; do sed 's|^URL: nar/|URL: |' "$f" > "$f.tmp" && mv "$f.tmp" "$f"; done
+          rm -f nix-cache-info
+          ls -la
+      - name: Upload
+        if: inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cache-${{ matrix.system }}
+          path: ${{ runner.temp }}/cache
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: inputs.publish || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: cache-*
+          merge-multiple: true
+          path: cache
+      - name: Publish to the nix-cache release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd cache
+          printf 'StoreDir: /nix/store\nWantMassQuery: 1\nPriority: 41\n' > nix-cache-info
+          if ! gh release view nix-cache -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create nix-cache -R "$GITHUB_REPOSITORY" --latest=false \
+              --title "Nix binary cache" \
+              --notes "The binary cache for this flake: signed NARs, not a release. See README.md."
+          fi
+          gh release upload nix-cache -R "$GITHUB_REPOSITORY" --clobber ./*
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # A release holds at most 1000 assets. Drop what was published more
+          # than 180 days ago; a consumer pinned to something that old builds
+          # it from source instead.
+          id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/nix-cache" --jq .id)"
+          cutoff="$(date -u -d '180 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets" \
+            --jq ".[] | select(.name != \"nix-cache-info\" and .updated_at < \"$cutoff\") | .id" |
+            while read -r asset; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset"; done

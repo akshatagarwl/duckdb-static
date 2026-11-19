@@ -1,0 +1,99 @@
+# Keeps the flake current without anyone touching it: daily, move to the latest
+# DuckDB release (scripts/update.sh); on Mondays, also update nixpkgs. The
+# change is committed to `auto-update`, built and smoke-tested on every system
+# and published to the cache, and only then fast-forwarded onto main. A failed
+# build leaves main where it was.
+name: Update
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      nixpkgs:
+        description: Also update nixpkgs.
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+      ref: ${{ steps.commit.outputs.ref }}
+      version: ${{ steps.commit.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: DuckDB
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: scripts/update.sh
+
+      - name: nixpkgs
+        if: github.event_name == 'schedule' || inputs.nixpkgs
+        run: |
+          set -euo pipefail
+          # Weekly on the schedule; whenever asked on a manual run.
+          if [ "${{ github.event_name }}" = schedule ] && [ "$(date -u +%u)" != 1 ]; then
+            echo "not Monday"
+            exit 0
+          fi
+          nix flake update nixpkgs
+
+      - name: Commit
+        id: commit
+        run: |
+          set -euo pipefail
+          version="$(jq -r .duckdb.version sources.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          parts=()
+          git diff --quiet -- sources.json || parts+=("DuckDB $version")
+          git diff --quiet -- flake.lock || parts+=("nixpkgs $(jq -r .nodes.nixpkgs.locked.rev flake.lock | cut -c1-12)")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "update: $(IFS=', '; echo "${parts[*]}")"
+          git push --force origin HEAD:refs/heads/auto-update
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.update.outputs.ref }}
+      publish: true
+    secrets: inherit
+
+  promote:
+    needs: [update, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.update.outputs.ref }}
+          fetch-depth: 0
+      - name: Fast-forward main
+        run: |
+          set -euo pipefail
+          # Fails, harmlessly, if main moved meanwhile; the next run retries.
+          git push origin "${{ needs.update.outputs.ref }}:refs/heads/main"
+          tag="duckdb-v${{ needs.update.outputs.version }}"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            git tag "$tag" "${{ needs.update.outputs.ref }}"
+            git push origin "$tag"
+          fi

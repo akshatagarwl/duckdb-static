@@ -19,7 +19,6 @@
 {
   lib,
   stdenv,
-  buildPackages,
   fetchFromGitHub,
   cmake,
   ninja,
@@ -126,8 +125,7 @@ stdenv.mkDerivation {
     ninja
     python3
     removeReferencesTo
-  ]
-  ++ lib.optional stdenv.hostPlatform.isDarwin buildPackages.cctools;
+  ];
   buildInputs = [
     croaring
     openssl'
@@ -200,22 +198,16 @@ stdenv.mkDerivation {
     runHook preInstall
     mkdir -p "$out/lib" "$out/include"
     archives=$(find "$PWD" -name '*.a' ! -path '*/_deps/*' | LC_ALL=C sort)
-    ${
-      if stdenv.hostPlatform.isDarwin then
-        ''
-          libtool -static -o "$out/lib/libduckdb_static.a" static_extension_loader.o $archives ${toString depArchives}
-        ''
-      else
-        ''
-          $AR rcD loader.a static_extension_loader.o
-          {
-            echo "create $out/lib/libduckdb_static.a"
-            for a in "$PWD/loader.a" $archives ${toString depArchives}; do echo "addlib $a"; done
-            echo save
-            echo end
-          } | $AR -M
-        ''
-    }
+    # An MRI script keeps every member of every archive, even ones with the
+    # same name. The toolchain's ar is GNU ar on Linux and llvm-ar on macOS;
+    # both read MRI scripts.
+    $AR rcD loader.a static_extension_loader.o
+    {
+      echo "create $out/lib/libduckdb_static.a"
+      for a in "$PWD/loader.a" $archives ${toString depArchives}; do echo "addlib $a"; done
+      echo save
+      echo end
+    } | $AR -M
     $RANLIB "$out/lib/libduckdb_static.a"
     cp ../src/include/duckdb.h ../src/include/duckdb_static_extension.h "$out/include/"
     runHook postInstall

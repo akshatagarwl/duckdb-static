@@ -28,6 +28,7 @@
   openssl,
   curlMinimal,
   libpq,
+  tzdata,
   zlib,
   removeReferencesTo,
   sources ? lib.importJSON ./sources.json,
@@ -57,7 +58,16 @@ let
     scpSupport = false;
     http2Support = false;
   };
-  libpq' = libpq.override { openssl = openssl'; };
+  libpq' = libpq.override (
+    {
+      openssl = openssl';
+    }
+    // lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+      # libpq only records tzdata's path. The static darwin tzdata fails one of
+      # its own self-tests (now.ck); its data is what matters here.
+      tzdata = tzdata.overrideAttrs { doCheck = false; };
+    }
+  );
 
   fetch =
     src:

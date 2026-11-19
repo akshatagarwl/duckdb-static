@@ -46,7 +46,9 @@ duckdb_open(NULL, &db);   /* LOAD ducklake; LOAD httpfs; ... all work offline */
 ```
 
 Link with the C++ driver of the same toolchain (for the C++ runtime), e.g.
-`$CXX main.o libduckdb_static.a`. From Rust, point
+`$CXX main.o libduckdb_static.a`. On macOS also link the system frameworks
+`-framework CoreFoundation -framework Security -framework SystemConfiguration`
+(curl's proxy settings and the keychain trust store; `passthru.linkFlags`). From Rust, point
 [`libduckdb-sys`](https://crates.io/crates/libduckdb-sys) at it with
 `DUCKDB_STATIC=1 DUCKDB_LIB_DIR=<out>/lib DUCKDB_INCLUDE_DIR=<out>/include`.
 

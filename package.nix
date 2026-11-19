@@ -230,6 +230,17 @@ stdenv.mkDerivation {
 
   passthru = {
     inherit linked extensions sources;
+    # What a program linking the archive needs besides it and the C++ runtime:
+    # on macOS, system frameworks (curl reads the proxy settings, the TLS code
+    # the keychain trust store). All of them ship with macOS.
+    linkFlags = lib.optionals stdenv.hostPlatform.isDarwin [
+      "-framework"
+      "CoreFoundation"
+      "-framework"
+      "Security"
+      "-framework"
+      "SystemConfiguration"
+    ];
   };
 
   meta = {

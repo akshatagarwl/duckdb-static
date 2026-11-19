@@ -15,8 +15,9 @@ stdenv.mkDerivation {
   nativeBuildInputs = [ file ];
   buildPhase = ''
     $CC -O1 -I${duckdb}/include -c ${./smoke.c} -o smoke.o
-    # The C++ driver, for the C++ runtime DuckDB needs.
-    $CXX smoke.o ${duckdb}/lib/libduckdb_static.a -o smoke
+    # The C++ driver, for the C++ runtime DuckDB needs; on macOS also the
+    # system frameworks curl and the TLS code use (proxies, trust store).
+    $CXX smoke.o ${duckdb}/lib/libduckdb_static.a -o smoke ${lib.escapeShellArgs duckdb.linkFlags}
     ./smoke ${lib.escapeShellArgs args}
     file smoke
     ${

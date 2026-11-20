@@ -1,27 +1,27 @@
 {
   "duckdb": {
-    "version": "2.0.0",
-    "rev": "d54cbbe3df17e8e5ce68312f483b4155836112aa",
-    "hash": "sha256-1fhgPD/QGT/fK+BabX2dbTWOsajS6feNl5+9iw8rvwU="
+    "version": "2.0.1",
+    "rev": "8d78114e90a53823803660bf821f6073ac87da8c",
+    "hash": "sha256-DJx1RsCwTIhuoSaNfqUIpDIkQ3YIOYbvGTgufBTalmk="
   },
   "extensions": {
     "ducklake": {
       "owner": "duckdb",
       "repo": "ducklake",
-      "rev": "417a9117f590e8141742ac0579d02f6a90162e37",
-      "hash": "sha256-CfGNeFJlTjLS5/2GEg4EU8Ph9I8mLPax96wCNOIrgZk="
+      "rev": "08089b16dc8a18ce04abb6efd87e25cb4d64803a",
+      "hash": "sha256-T4XA2TrADtdhW3axrn5nytWEC27QeBYDXFReergDm2c="
     },
     "httpfs": {
       "owner": "duckdb",
       "repo": "duckdb-httpfs",
-      "rev": "77392a72077a85897db2519fae11e2c0da972b8a",
-      "hash": "sha256-Ni2stJrRSbTkHs+SjfuumtrhIVO917Q9uh91O2YalPM="
+      "rev": "f71cfdb4bff85b9e15b1f3b842d9aa395aff0167",
+      "hash": "sha256-rTG5cQlvwvyfPWnLTvuUmUH0sEfjbQiyInHCKtM0Q9U="
     },
     "postgres_scanner": {
       "owner": "duckdb",
       "repo": "duckdb-postgres",
-      "rev": "c0f5a3c0c4b68b02afbf669d36d7f0e503985c88",
-      "hash": "sha256-97aAF2O4mZLPSmIko8jdV2orR/2M8i13SU1a1yXV8sA=",
+      "rev": "8b9d0bbe8de4c57fb90d9e2530f9ce39f8c4baf3",
+      "hash": "sha256-SdjIeRIFhoVHrBaRhWVuNr1M5DYxe7L6pQZbbnm6CnY=",
       "submodules": {
         "database-connector": {
           "owner": "duckdb",
@@ -34,8 +34,8 @@
     "quack": {
       "owner": "duckdb",
       "repo": "duckdb-quack",
-      "rev": "f96420ed46aee9c42064bdb99ddfd1230d6c0086",
-      "hash": "sha256-S3/yaeTiJoA3efiMPksLVGlfKm3JH7I3tzuub9v3IQg="
+      "rev": "3bc63c01f80a13d57ca02a721dd13908c1d934c1",
+      "hash": "sha256-DnmliMjsx2pgan7RVKT35Y2Ohj4mISDqKxFOYF/TWkY="
     }
   }
 }

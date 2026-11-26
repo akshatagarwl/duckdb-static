@@ -37,5 +37,15 @@
       "rev": "3bc63c01f80a13d57ca02a721dd13908c1d934c1",
       "hash": "sha256-DnmliMjsx2pgan7RVKT35Y2Ohj4mISDqKxFOYF/TWkY="
     }
+  },
+  "community": {
+    "gatekeeper": {
+      "owner": "nozzle",
+      "repo": "duckdb-gatekeeper",
+      "tag": "v0.4.5",
+      "rev": "0d822bd1308df68a5f6675311cf33adbf16a8fe5",
+      "hash": "sha256-wjOsSrDRyLfDkrGubWUelWEloXiIBrx2W09JLkGM6XU=",
+      "duckdb": "8d78114e90a53823803660bf821f6073ac87da8c"
+    }
   }
 }

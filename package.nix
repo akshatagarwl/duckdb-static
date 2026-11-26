@@ -7,7 +7,9 @@
 # Every pin comes from sources.json (scripts/update.sh writes it): the DuckDB
 # release, and the exact commits that release pins for each out-of-tree
 # extension in its own .github/config/extensions/<name>.cmake. The build fails
-# if the two disagree.
+# if the two disagree. Community extensions (`community` in sources.json) are
+# not pinned by DuckDB: each is pinned to a release tag of its own, and records
+# the DuckDB commit that release targets, which must be the one built here.
 #
 # Output:
 #   lib/libduckdb_static.a  DuckDB, the extensions, a generated
@@ -75,16 +77,26 @@ let
       inherit (src) repo rev hash;
     };
 
-  extensions = lib.mapAttrs (
+  withSources =
     name: ext:
     ext
     // {
       src = fetch ext;
-      # DuckDB's convention for an extension built from a commit.
-      version = lib.substring 0 10 ext.rev;
+      # DuckDB's convention for an extension built from a commit; a community
+      # extension reports its release tag.
+      version = ext.tag or (lib.substring 0 10 ext.rev);
       submodules = lib.mapAttrs (_: fetch) (ext.submodules or { });
-    }
-  ) sources.extensions;
+    };
+
+  community = lib.mapAttrs (
+    name: ext:
+    if ext.duckdb == sources.duckdb.rev then
+      withSources name ext
+    else
+      throw "duckdb-static: ${name} ${ext.tag} targets DuckDB ${ext.duckdb}, not ${sources.duckdb.rev} (v${version}); repin it in sources.json"
+  ) (sources.community or { });
+
+  extensions = lib.mapAttrs withSources sources.extensions // community;
 
   linked = inTreeExtensions ++ lib.attrNames extensions;
 
@@ -160,7 +172,7 @@ stdenv.mkDerivation {
           grep GIT_TAG .github/config/extensions/${name}.cmake >&2
           exit 1
         }
-      '') extensions
+      '') (removeAttrs extensions (lib.attrNames community))
     )}
     substitute ${extensionConfig} extensions.cmake ${
       lib.concatStrings (

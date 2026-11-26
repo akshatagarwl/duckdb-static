@@ -28,6 +28,19 @@ static void run(const char *sql) {
 	duckdb_destroy_result(&r);
 }
 
+// The query must fail with an error containing `want`.
+static void refused(const char *sql, const char *want) {
+	duckdb_result r;
+	if (duckdb_query(con, sql, &r) != DuckDBError) {
+		fail(sql, "succeeded, should have been refused");
+	}
+	if (!strstr(duckdb_result_error(&r), want)) {
+		fail(sql, duckdb_result_error(&r));
+	}
+	printf("ok   %-60.60s refused\n", sql);
+	duckdb_destroy_result(&r);
+}
+
 // The first column of the first row, as text; the caller frees it.
 static char *scalar(const char *sql) {
 	duckdb_result r;
@@ -101,6 +114,20 @@ int main(int argc, char **argv) {
 	expect("SELECT count(*) > 0 FROM duckdb_functions() WHERE function_name LIKE 'postgres%'", "true");   // postgres
 	expect("SELECT count(*) > 0 FROM duckdb_secret_types() WHERE type = 's3'", "true");              // httpfs
 	expect("SELECT count(*) > 0 FROM duckdb_functions() WHERE function_name LIKE 'quack%'", "true");     // quack
+
+	// gatekeeper: allow one table, then enforce on a fresh connection.
+	run("CREATE TABLE secrets AS SELECT 'x' AS token");
+	run("CALL gatekeeper_configure(allowed_tables := [{schema_path: ['main'], 'table': 't'}])");
+	expect("SELECT code FROM gatekeeper_validate('SELECT * FROM secrets')", "forbidden");
+	duckdb_disconnect(&con);
+	if (duckdb_connect(db, &con) == DuckDBError) {
+		fail("connect", "second connection");
+	}
+	run("CREATE TABLE t AS SELECT range AS v FROM range(4)");
+	run("CALL gatekeeper_enforce()");
+	expect("WITH w AS (SELECT v FROM t) SELECT string_agg(v::VARCHAR, ',' ORDER BY v) FROM w", "0,1,2,3");
+	refused("SELECT * FROM secrets", "Permission Error");
+	refused("SELECT getenv('HOME')", "Permission Error");
 
 	duckdb_disconnect(&con);
 	duckdb_close(&db);

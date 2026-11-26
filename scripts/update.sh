@@ -8,6 +8,10 @@
 # pinned too, except DuckDB itself and its CI tooling, which a build inside the
 # DuckDB tree does not use.
 #
+# Community extensions (`community`) are carried over unchanged: DuckDB does
+# not pin them, so a new DuckDB release fails to build until each is repinned
+# to a release that targets it.
+#
 # Usage: scripts/update.sh [vX.Y.Z]    FORCE=1 rewrites even when current.
 # Needs curl, jq and nix. GITHUB_TOKEN, if set, avoids API rate limits.
 set -euo pipefail
@@ -32,7 +36,8 @@ fi
 rev="$(api "repos/duckdb/duckdb/commits/$tag" | jq -r .sha)"
 echo "DuckDB $tag = $rev"
 json="$(jq -n --arg version "$version" --arg rev "$rev" --arg hash "$(prefetch duckdb/duckdb "$rev")" \
-  '{duckdb: {version: $version, rev: $rev, hash: $hash}, extensions: {}}')"
+  --argjson community "$(jq '.community // {}' sources.json)" \
+  '{duckdb: {version: $version, rev: $rev, hash: $hash}, extensions: {}, community: $community}')"
 
 for name in $(jq -r '.extensions | keys[]' sources.json); do
   cfg="$(curl -fsSL "https://raw.githubusercontent.com/duckdb/duckdb/$rev/.github/config/extensions/$name.cmake")" || {

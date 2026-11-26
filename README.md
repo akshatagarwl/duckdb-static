@@ -5,7 +5,8 @@ compiled in**, built from source with Nix, kept current automatically, and
 served from its own binary cache.
 
 Link `libduckdb_static.a` and you get DuckDB plus `core_functions`, `parquet`,
-`json`, `icu`, `ducklake`, `httpfs`, `postgres_scanner` and `quack`, with their
+`json`, `icu`, `ducklake`, `httpfs`, `postgres_scanner`, `quack` and the
+community extension [`gatekeeper`](https://github.com/nozzle/duckdb-gatekeeper), with their
 C dependencies (CRoaring, OpenSSL, curl, libpq, zlib) inside the same archive.
 A program built with it never downloads or `dlopen`s an extension, so it can be
 a single static binary that runs anywhere, offline. On Linux the archive is
@@ -15,7 +16,7 @@ built for musl, so the program can be fully static.
 |---|---|
 | Systems | `x86_64-linux`, `aarch64-linux` (musl), `aarch64-darwin` |
 | Output | `lib/libduckdb_static.a`, `include/duckdb.h`, `include/duckdb_static_extension.h` |
-| Pins | `sources.json`: the DuckDB release, and the extension commits that release pins |
+| Pins | `sources.json`: the DuckDB release, the extension commits that release pins, and a release tag for each community extension |
 | Cache | `https://github.com/akshatagarwl/duckdb-static/releases/download/nix-cache` |
 
 ## Use it
@@ -83,14 +84,21 @@ published to the cache, and only then fast-forwarded onto `main`, with a
 `duckdb-v<version>` tag on each new DuckDB release. A failed build leaves
 `main` untouched.
 
+Community extensions are not pinned by DuckDB, so the updater keeps them as
+they are. Each entry in `community` names the DuckDB commit its release
+targets, and the build refuses to start when that is not the DuckDB being
+built: a new DuckDB release waits until each community extension is repinned
+to a release made for it.
+
 `test/smoke.c` links the archive, registers the extensions, checks each one is
 statically linked at the pinned version, and uses them (a DuckLake table,
-Parquet, JSON, ICU time zones, the httpfs, postgres and quack catalogs), with
+Parquet, JSON, ICU time zones, the httpfs, postgres and quack catalogs, and a
+gatekeeper policy enforced on a connection), with
 autoloading and autoinstall compiled out. It also checks that the program
 links nothing but the operating system.
 
 ## Licence
 
-The packaging is MIT ([LICENSE](LICENSE)). DuckDB and its extensions are MIT;
+The packaging is MIT ([LICENSE](LICENSE)). DuckDB, its extensions and gatekeeper are MIT;
 the bundled libraries keep their own licences (OpenSSL: Apache-2.0, curl: curl,
 libpq: PostgreSQL, CRoaring: Apache-2.0/MIT, zlib: zlib).
